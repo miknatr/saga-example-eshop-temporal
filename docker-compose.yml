@@ -1,0 +1,62 @@
+services:
+
+  postgresql:
+    image: postgres:12
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: postgres
+
+  adminer:
+    depends_on:
+      - postgresql
+    image: adminer
+    restart: always
+    ports:
+      - "8081:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgresql:5432
+      AUTO_LOGIN_DRIVER: pgsql
+      AUTO_LOGIN_USERNAME: postgres
+      AUTO_LOGIN_PASSWORD: password
+      AUTO_LOGIN_DATABASE: postgres
+    volumes:
+      - ./adminer_index.php:/var/www/html/index.php
+
+  temporal:
+    depends_on:
+      - postgresql
+    environment:
+      DB: postgresql
+      DB_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PWD: password
+      POSTGRES_SEEDS: postgresql
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
+    image: temporalio/auto-setup:1.16.2
+    ports:
+      - 7233:7233
+    volumes:
+      - ./temporal/dynamicconfig:/etc/temporal/config/dynamicconfig
+
+  temporal-admin-tools:
+    depends_on:
+      - temporal
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CLI_ADDRESS: temporal:7233
+    image: temporalio/admin-tools:1.25.0-tctl-1.18.1-cli-1.0.0
+    stdin_open: true
+    tty: true
+
+  temporal-ui:
+    depends_on:
+      - temporal
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:3000
+    image: temporalio/ui:2.26.2
+    ports:
+      - 8082:8080
