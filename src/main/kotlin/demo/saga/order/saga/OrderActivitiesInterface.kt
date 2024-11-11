@@ -5,7 +5,13 @@ import io.temporal.activity.ActivityInterface
 
 @ActivityInterface
 interface OrderActivitiesInterface {
-    fun placeOrder(workflowId: String, payerName: String, amount: Long, itemsDescription: String): String
+    fun placeOrder(
+        orderId: String,
+        workflowId: String,
+        payerName: String,
+        amount: Long,
+        itemsDescription: String
+    ): String
 
     fun holdMoney(orderId: String)
 
@@ -23,9 +29,11 @@ interface OrderActivitiesInterface {
 
     fun notifyCustomerAboutFail(orderId: String)
 
-    fun markOrderAsPaidAndDispatched(orderId: String): String
+    fun markOrderAsHandledManually(orderId: String)
 
-    fun cancelOrder(orderId: String, reason: String): String
+    fun markOrderAsPaidAndDispatched(orderId: String)
 
-    fun moveFlowToManualHandling(orderId: String, reason: String): String
+    fun cancelOrder(orderId: String, reason: String)
+
+    fun moveFlowToManualHandling(orderId: String, reason: String)
 }

@@ -23,8 +23,14 @@ class OrderActivities : OrderActivitiesInterface {
     @Autowired
     private lateinit var notificationCenter: NotificationCenter
 
-    override fun placeOrder(workflowId: String, payerName: String, amount: Long, itemsDescription: String): String {
-        val order = Order.constructOrder(workflowId, payerName, amount, itemsDescription)
+    override fun placeOrder(
+        orderId: String,
+        workflowId: String,
+        payerName: String,
+        amount: Long,
+        itemsDescription: String
+    ): String {
+        val order = Order.constructOrder(orderId, workflowId, payerName, amount, itemsDescription)
         orderRepository.save(order)
         return order.id
     }
@@ -135,33 +141,35 @@ class OrderActivities : OrderActivitiesInterface {
         orderRepository.save(order)
     }
 
-    override fun markOrderAsPaidAndDispatched(orderId: String): String {
+    override fun markOrderAsHandledManually(orderId: String) {
+        val order = orderRepository.findById(orderId).get()
+
+        order.markAsHandledManually()
+
+        orderRepository.save(order)
+    }
+
+    override fun markOrderAsPaidAndDispatched(orderId: String) {
         val order = orderRepository.findById(orderId).get()
 
         order.markAsPaidAndDispatched()
 
         orderRepository.save(order)
-
-        return "Order ${order.id} has been paid and dispatched"
     }
 
-    override fun cancelOrder(orderId: String, reason: String): String {
+    override fun cancelOrder(orderId: String, reason: String) {
         val order = orderRepository.findById(orderId).get()
 
         order.cancel(reason)
 
         orderRepository.save(order)
-
-        return "Order ${order.id} has been canceled, reason: $reason"
     }
 
-    override fun moveFlowToManualHandling(orderId: String, reason: String): String {
+    override fun moveFlowToManualHandling(orderId: String, reason: String) {
         val order = orderRepository.findById(orderId).get()
 
         order.moveToManualHandling(reason)
 
         orderRepository.save(order)
-
-        return "Order ${order.id} has been moved to manual handling, reason: $reason"
     }
 }

@@ -2,8 +2,10 @@ package demo.saga.order.saga
 
 import demo.saga.order.external_systems.WarehouseOrderResult
 import io.temporal.activity.ActivityOptions
+import io.temporal.workflow.CompletablePromise
 import io.temporal.workflow.Workflow
 import java.time.Duration
+
 
 class OrderWorkflow : OrderWorkflowInterface {
     private val steps: OrderActivitiesInterface =
@@ -14,12 +16,13 @@ class OrderWorkflow : OrderWorkflowInterface {
                 .build()
         )
 
-    private var isManualConfirmed = false
+    private val confirmationPromise: CompletablePromise<Void> = Workflow.newPromise()
+    private val cancellationPromise: CompletablePromise<Void> = Workflow.newPromise()
 
-    override fun processOrder(payerName: String, amount: Long, itemsDescription: String): String {
-        val workflowId = Workflow.getInfo().runId
+    override fun startOrder(orderId: String, payerName: String, amount: Long, itemsDescription: String) {
+        val workflowId = Workflow.getInfo().workflowId
 
-        val orderId = steps.placeOrder(workflowId, payerName, amount, itemsDescription)
+        steps.placeOrder(orderId, workflowId, payerName, amount, itemsDescription)
 
         try {
             steps.holdMoney(orderId)
@@ -29,8 +32,8 @@ class OrderWorkflow : OrderWorkflowInterface {
             if (isRisky) {
                 steps.cancelHold(orderId)
                 steps.notifyCustomerAboutFail(orderId)
-                val finalState = steps.cancelOrder(orderId, "Payments from this customer are too risky")
-                return finalState
+                steps.cancelOrder(orderId, "Payments from this customer are too risky")
+                return
             }
 
             val warehouseOrderResult = steps.orderItemsFromWarehouse(orderId)
@@ -39,20 +42,26 @@ class OrderWorkflow : OrderWorkflowInterface {
                 // Consider to order from another warehouse
                 steps.cancelHold(orderId)
                 steps.notifyCustomerAboutFail(orderId)
-                val finalState = steps.cancelOrder(orderId, "Ordered items are out of stock")
-                return finalState
+                steps.cancelOrder(orderId, "Ordered items are out of stock")
+                return
             }
 
             if (warehouseOrderResult == WarehouseOrderResult.PARTIAL) {
-                val finalState = steps.moveFlowToManualHandling(orderId, "Only some items are in stock")
-                // Workflow.await { isManualConfirmed }
-                return finalState
+                steps.moveFlowToManualHandling(orderId, "Only some items are in stock")
+
+                Workflow.await { confirmationPromise.isCompleted || cancellationPromise.isCompleted }
+
+                steps.markOrderAsHandledManually(orderId)
+
+                if (cancellationPromise.isCompleted) {
+                    steps.cancelOrder(orderId, "Order is manually cancelled")
+                    return
+                }
             }
 
             steps.captureMoney(orderId)
-            val finalState = steps.markOrderAsPaidAndDispatched(orderId)
-
-            return finalState
+            steps.markOrderAsPaidAndDispatched(orderId)
+            return
         } catch (e: Exception) {
             steps.cancelHold(orderId)
             steps.notifyWarehouseAboutFail(orderId)
@@ -60,13 +69,15 @@ class OrderWorkflow : OrderWorkflowInterface {
 
             val cancelReason = e.message ?: "Unknown error"
 
-            val finalState = steps.cancelOrder(orderId, cancelReason)
-
-            return finalState
+            steps.cancelOrder(orderId, cancelReason)
         }
     }
 
-    override fun confirmOrderManually(orderId: String) {
-        isManualConfirmed = true
+    override fun confirmPartiallyAssembledOrder(orderId: String) {
+        confirmationPromise.complete(null)
+    }
+
+    override fun cancelPartiallyAssembledOrder(orderId: String) {
+        cancellationPromise.complete(null)
     }
 }

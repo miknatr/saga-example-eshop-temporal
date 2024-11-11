@@ -3,8 +3,6 @@ package demo.saga.order.domain
 import demo.saga.order.domain.OrderStatus.*
 import jakarta.persistence.*
 import java.time.OffsetDateTime
-import kotlin.math.absoluteValue
-import kotlin.random.Random
 
 @Entity
 @Table(name = "orders")
@@ -40,6 +38,9 @@ class Order private constructor(
     @Column
     var manualHandlingReason: String? = null,
 
+    @Column
+    var isHandledManually: Boolean = false,
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     var status: OrderStatus,
@@ -54,9 +55,15 @@ class Order private constructor(
     var completedAt: OffsetDateTime? = null
 ) {
     companion object {
-        fun constructOrder(workflowId: String, customerName: String, amount: Long, itemsDescription: String) =
+        fun constructOrder(
+            orderId: String,
+            workflowId: String,
+            customerName: String,
+            amount: Long,
+            itemsDescription: String
+        ) =
             Order(
-                id = Random.nextLong().absoluteValue.toString(),
+                id = orderId,
                 workflowId = workflowId,
                 customerName = customerName,
                 amount = amount,
@@ -153,6 +160,11 @@ class Order private constructor(
         status = PAID_AND_DISPATCHED
         updatedAt = OffsetDateTime.now()
         completedAt = OffsetDateTime.now()
+    }
+
+    fun markAsHandledManually() {
+        isHandledManually = true
+        updatedAt = OffsetDateTime.now()
     }
 
     fun cancel(reason: String) {

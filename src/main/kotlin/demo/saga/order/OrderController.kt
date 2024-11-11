@@ -1,50 +1,81 @@
 package demo.saga.order
 
+import demo.saga.order.domain.Order
 import demo.saga.order.domain.OrderRepository
-import demo.saga.order.saga.OrderWorkflowFactory
+import demo.saga.order.domain.OrderStatus
+import demo.saga.order.saga.OrderWorkflowInterface
+import io.temporal.client.WorkflowClient
+import io.temporal.client.WorkflowOptions
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.servlet.view.RedirectView
+import kotlin.math.absoluteValue
+import kotlin.random.Random
 
 @RestController
-class OrderApiController {
+class OrderController {
     @Autowired
-    private lateinit var workflowFactory: OrderWorkflowFactory
+    private lateinit var workflowClient: WorkflowClient
 
     @Autowired
     private lateinit var orderRepository: OrderRepository
 
-    @GetMapping("/processOrder")
-    fun processOrder(): String {
-        val workflow = workflowFactory.createWorkflow()
+    @GetMapping("/startOrder")
+    fun startOrder(): RedirectView {
+        val orderId = Random.nextLong().absoluteValue.toString()
 
-        val orderFinalState = workflow
-            .processOrder("mr. Payer", 100, "salami and camambert")
+        val workflow = workflowClient.newWorkflowStub(
+            OrderWorkflowInterface::class.java,
+            WorkflowOptions.newBuilder().setWorkflowId("Order:${orderId}").setTaskQueue("OrderTaskQueue").build()
+        )
 
-        val workflowId = workflowFactory.toStub(workflow).execution.workflowId
+        WorkflowClient.start(workflow::startOrder, orderId, "mr. Payer", 100, "salami and camambert")
 
-        return "workflowId: $workflowId, $orderFinalState"
+        return RedirectView("/")
     }
 
-    @GetMapping("/confirmOrder")
-    fun confirmOrder(@RequestParam("orderId") orderId: String): String {
-        // TODO example with signals
+    @GetMapping("/confirmPartiallyAssembledOrder")
+    fun confirmPartiallyAssembledOrder(@RequestParam("orderId") orderId: String): RedirectView {
         val order = orderRepository.findById(orderId).get()
 
-        val workflow = workflowFactory.getWorkflow(order.workflowId)
-        workflow.signal("confirmOrderManually")
+        val workflow = workflowClient.newWorkflowStub(OrderWorkflowInterface::class.java, order.workflowId)
+        workflow.confirmPartiallyAssembledOrder(order.workflowId)
 
-        return "workflowId: ${order.workflowId}"
+        return RedirectView("/")
     }
 
-    @GetMapping("/showOrders")
-    fun showOrder(): String {
+    @GetMapping("/cancelPartiallyAssembledOrder")
+    fun cancelPartiallyAssembledOrder(@RequestParam("orderId") orderId: String): RedirectView {
+        val order = orderRepository.findById(orderId).get()
+
+        val workflow = workflowClient.newWorkflowStub(OrderWorkflowInterface::class.java, order.workflowId)
+        workflow.cancelPartiallyAssembledOrder(order.workflowId)
+
+        return RedirectView("/")
+    }
+
+    @GetMapping("/")
+    fun showOrders(): String {
+        val manualActionButtons = fun(order: Order): String {
+            if (order.status != OrderStatus.MANUAL_HANDLING) {
+                return ""
+            }
+
+            return """
+                    <a href="./confirmPartiallyAssembledOrder?orderId=${order.id}">confirm<a>
+                    |
+                    <a href="./cancelPartiallyAssembledOrder?orderId=${order.id}">cancel<a>
+                """.trimIndent()
+        }
+
         val tableRows = orderRepository
-            .findAll()
+            .findAllByOrderByCreatedAtDesc()
             .joinToString("") { order ->
                 """
                     <tr>
+                        <td>${manualActionButtons(order)}</td>
                         <td>${order.status}</td>
                         <td>${order.id}</td>
                         <td>${order.workflowId}</td>
@@ -56,7 +87,7 @@ class OrderApiController {
                         <td>${order.riskScore}</td>
                         <td>${order.cancelReason}</td>
                         <td>${order.manualHandlingReason}</td>
-                        <td>${order.updatedAt}</td>
+                        <td>${order.createdAt}</td>
                     </tr>
                 """.trimIndent()
             }
@@ -86,8 +117,12 @@ class OrderApiController {
                 </style>
             </head>
             <body>
+                <p>
+                    <a href="./startOrder">Start new order<a>
+                </p>
                 <table border="1">
                     <tr>
+                        <th>actions</th>
                         <th>status</th>
                         <th>id</th>
                         <th>workflowId</th>
@@ -99,7 +134,7 @@ class OrderApiController {
                         <th>riskScore</th>
                         <th>cancelReason</th>
                         <th>manualHandlingReason</th>
-                        <th>updatedAt</th>
+                        <th>createdAt</th>
                     </tr>
                     $tableRows
                 </table>

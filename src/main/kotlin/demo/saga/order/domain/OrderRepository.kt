@@ -4,4 +4,6 @@ import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.stereotype.Repository
 
 @Repository
-interface OrderRepository : JpaRepository<Order, String>
+interface OrderRepository : JpaRepository<Order, String> {
+    fun findAllByOrderByCreatedAtDesc(): List<Order>
+}

@@ -7,8 +7,11 @@ import io.temporal.workflow.WorkflowMethod
 @WorkflowInterface
 interface OrderWorkflowInterface {
     @WorkflowMethod
-    fun processOrder(payerName: String, amount: Long, itemsDescription: String): String
+    fun startOrder(orderId: String, payerName: String, amount: Long, itemsDescription: String)
 
     @SignalMethod
-    fun confirmOrderManually(orderId: String)
+    fun confirmPartiallyAssembledOrder(orderId: String)
+
+    @SignalMethod
+    fun cancelPartiallyAssembledOrder(orderId: String)
 }

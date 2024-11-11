@@ -31,9 +31,5 @@ Temporal admin panel: http://localhost:8082
 
 ## Endpoints:
 
-Start new order processing:
-
-http://localhost:8080/processOrder
-
-Show all orders:
-http://localhost:8080/showOrders
+To see demo app:
+http://localhost:8080/
