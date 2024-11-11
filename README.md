@@ -32,4 +32,4 @@ Temporal admin panel: http://localhost:8082
 ## Endpoints:
 
 To see demo app:
-http://localhost:8080/
+http://localhost:8080
